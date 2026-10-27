@@ -1,4 +1,7 @@
 from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import joblib
 from app.schemas import ModelInput, ModelOutput
@@ -7,6 +10,7 @@ ml_resources = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Carga del modelo en memoria
     try:
         ml_resources["model"] = joblib.load("model_artifacts/model.joblib")
         print("Modelo cargado exitosamente en memoria.")
@@ -18,6 +22,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ML Production Service", lifespan=lifespan)
 
+# 1. Habilitar CORS para permitir peticiones desde el navegador
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 2. Servir el frontend en la ruta raíz "/"
+@app.get("/", include_in_schema=False)
+def serve_ui():
+    return FileResponse("static/index.html")
+
+# 3. Montar la carpeta static para recursos adicionales si los hubiera
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 4. Endpoints de la API
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check():
     if ml_resources.get("model") is None:
@@ -29,9 +51,9 @@ def predict(payload: ModelInput):
     model = ml_resources.get("model")
     if not model:
         raise HTTPException(status_code=503, detail="Modelo no inicializado")
-
+    
     input_data = [[payload.feature_numeric_1, payload.feature_numeric_2]]
-
+    
     pred = model.predict(input_data)[0]
     prob = getattr(model, "predict_proba", lambda x: [[0.0, 1.0]])(input_data)[0][1]
 

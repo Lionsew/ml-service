@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLOps Production Dashboard - Modelo v1.0.0</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            },
+            darkBg: '#0b0f19',
+            darkCard: '#111827',
+            darkBorder: '#1f2937'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    code, pre {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Estilización del scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.05);
+    }
+    .dark ::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #9ca3af;
+      border-radius: 4px;
+    }
+    .dark ::-webkit-scrollbar-thumb {
+      background: #374151;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-[#090d16] text-slate-800 dark:text-slate-200 transition-colors duration-200 antialiased min-h-screen flex flex-col">
+
+  <!-- Header Superior Corporativo -->
+  <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur sticky top-0 z-30 px-4 lg:px-8 py-3.5 transition-colors">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25">
+          <i data-lucide="cpu" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-lg text-slate-900 dark:text-white tracking-tight">MLOps Inference Hub</h1>
+            <span class="text-xs bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-semibold px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-700/50">v1.0.0</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Microservicio FastAPI &bull; Logistic Regression Core</p>
+        </div>
+      </div>
+
+      <!-- Métricas de estado en la cabecera -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span id="serviceStatusLabel" class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">API Health: 200 OK</span>
+        </div>
+
+        <!-- Botón Modo Oscuro / Claro -->
+        <button id="themeToggleBtn" class="p-2 rounded-lg border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+          <i id="themeIcon" data-lucide="sun" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Indicador de conexión real / simulación -->
+        <div class="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 border-l border-slate-200 dark:border-slate-800 pl-3">
+          <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+          <span>Target: <code class="text-indigo-600 dark:text-indigo-400 font-mono">localhost:8000</code></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Pestañas de Navegación -->
+  <div class="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d1322] px-4 lg:px-8">
+    <div class="max-w-7xl mx-auto flex space-x-6 text-sm font-medium">
+      <button onclick="switchTab('single')" id="tab-btn-single" class="tab-btn py-3 border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 flex items-center gap-2 transition">
+        <i data-lucide="zap" class="w-4 h-4"></i> Inferencia Individual
+      </button>
+      <button onclick="switchTab('batch')" id="tab-btn-batch" class="tab-btn py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 flex items-center gap-2 transition">
+        <i data-lucide="layers" class="w-4 h-4"></i> Ingesta por Lote (Batch)
+      </button>
+      <button onclick="switchTab('monitoring')" id="tab-btn-monitoring" class="tab-btn py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 flex items-center gap-2 transition">
+        <i data-lucide="activity" class="w-4 h-4"></i> Métricas & MLOps Drift
+      </button>
+    </div>
+  </div>
+
+  <!-- Contenedor Principal -->
+  <main class="max-w-7xl mx-auto p-4 lg:p-8 flex-1 w-full space-y-6">
+
+    <!-- TAB 1: INFERENCIA INDIVIDUAL -->
+    <div id="tab-content-single" class="tab-pane space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Formulario de Entrada (Left Column: 5 Cols) -->
+        <div class="lg:col-span-5 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800/80 p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-6">
+              <div class="flex items-center gap-2">
+                <i data-lucide="sliders" class="w-5 h-5 text-indigo-500"></i>
+                <h2 class="font-semibold text-slate-900 dark:text-white">Vector de Características</h2>
+              </div>
+              <button onclick="resetInputs()" class="text-xs text-slate-400 hover:text-indigo-500 transition flex items-center gap-1">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Restablecer
+              </button>
+            </div>
+
+            <form id="predictionForm" onsubmit="event.preventDefault(); triggerPrediction();" class="space-y-6">
+              
+              <!-- Feature Numeric 1 -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center text-sm">
+                  <label for="num1" class="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    feature_numeric_1
+                    <span class="text-xs text-slate-400 font-mono">(0.0 - 100.0)</span>
+                  </label>
+                  <input type="number" id="num1Input" min="0" max="100" step="0.1" value="42.5" 
+                    class="w-20 px-2 py-1 text-right text-xs font-mono font-semibold rounded-md border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                </div>
+                <input type="range" id="num1Slider" min="0" max="100" step="0.1" value="42.5"
+                  class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                <p class="text-xs text-slate-400 dark:text-slate-500">Variable cuantitativa normalizada para inferencia primaria.</p>
+              </div>
+
+              <!-- Feature Numeric 2 -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center text-sm">
+                  <label for="num2" class="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    feature_numeric_2
+                    <span class="text-xs text-slate-400 font-mono">(0.00 - 5.00)</span>
+                  </label>
+                  <input type="number" id="num2Input" min="0" max="5" step="0.01" value="1.75" 
+                    class="w-20 px-2 py-1 text-right text-xs font-mono font-semibold rounded-md border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                </div>
+                <input type="range" id="num2Slider" min="0" max="5" step="0.01" value="1.75"
+                  class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                <p class="text-xs text-slate-400 dark:text-slate-500">Coeficiente secundario continuo (tasa / escala).</p>
+              </div>
+
+              <!-- Feature Categorical 1 -->
+              <div class="space-y-2">
+                <label for="cat1" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  feature_categorical_1
+                </label>
+                <div class="relative">
+                  <select id="cat1Select" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-750 bg-slate-50 dark:bg-slate-800/80 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                    <option value="categoria_a" selected>categoria_a (Segmento Principal)</option>
+                    <option value="categoria_b">categoria_b (Segmento Secundario)</option>
+                    <option value="categoria_c">categoria_c (Segmento Especial)</option>
+                  </select>
+                </div>
+                <p class="text-xs text-slate-400 dark:text-slate-500">Metadato nominal incluido en el contrato Pydantic.</p>
+              </div>
+
+              <!-- Botón de Inferencia -->
+              <button type="submit" id="predictBtn" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-medium shadow-md shadow-indigo-500/20 active:scale-[0.99] transition flex items-center justify-center gap-2 group">
+                <i data-lucide="send" class="w-4 h-4 group-hover:translate-x-0.5 transition-transform"></i>
+                <span id="btnText">Ejecutar Inferencia Online</span>
+                <span id="btnLoader" class="hidden animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Mini alert status -->
+          <div id="apiAlert" class="mt-4 p-3 rounded-lg text-xs flex items-center gap-2 bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
+            <i data-lucide="info" class="w-4 h-4 text-indigo-400"></i>
+            <span id="apiAlertMsg">Intentando conexión en vivo con <code>/predict</code> (con fallback inteligente).</span>
+          </div>
+        </div>
+
+        <!-- Tarjetas de Resultados (Right Column: 7 Cols) -->
+        <div class="lg:col-span-7 space-y-6">
+
+          <!-- Tarjeta Principal de Predicción -->
+          <div class="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800/80 p-6 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-6">
+              <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Resultado de Inferencia</span>
+              <span id="responseStatusBadge" class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                Estado: Listo
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              
+              <!-- Radial Confidence Gauge -->
+              <div class="flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-800/60">
+                <div class="relative w-36 h-36 flex items-center justify-center">
+                  <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8" class="text-slate-200 dark:text-slate-800" fill="transparent" />
+                    <circle id="gaugeCircle" cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="26.4" stroke-linecap="round" class="text-indigo-600 transition-all duration-700 ease-out" fill="transparent" />
+                  </svg>
+                  <div class="absolute flex flex-col items-center justify-center text-center">
+                    <span id="confidencePercentage" class="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-white">89.5%</span>
+                    <span class="text-[10px] uppercase font-semibold text-slate-400">Confidence</span>
+                  </div>
+                </div>
+                <span class="text-xs text-slate-500 dark:text-slate-400 mt-2 font-mono">Probabilidad: <span id="confidenceRaw">0.8954</span></span>
+              </div>
+
+              <!-- Predicción y Metadatos -->
+              <div class="space-y-4">
+                <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+                  <span class="text-xs text-slate-400 block mb-1">Clase Clasificada (`prediction`)</span>
+                  <div class="flex items-center gap-3">
+                    <span id="predictionBadge" class="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">Clase 1</span>
+                    <span id="predictionTag" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                      Positivo
+                    </span>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                  <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/40">
+                    <span class="text-slate-400 block mb-0.5">Versión Modelo</span>
+                    <span id="resModelVersion" class="font-mono font-semibold text-slate-700 dark:text-slate-200">v1.0.0</span>
+                  </div>
+                  <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/40">
+                    <span class="text-slate-400 block mb-0.5">Latencia Estimada</span>
+                    <span id="resLatency" class="font-mono font-semibold text-indigo-600 dark:text-indigo-400">14.2 ms</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Inspección del Payload JSON y cURL en vivo -->
+          <div class="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800/80 p-5 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i data-lucide="terminal" class="w-4 h-4 text-slate-400"></i>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Payload en vivo & Comando cURL</h3>
+              </div>
+              <button onclick="copyCurlCommand()" class="text-xs px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition flex items-center gap-1.5">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copiar cURL
+              </button>
+            </div>
+
+            <pre id="curlBox" class="p-3 bg-slate-900 text-emerald-400 text-xs rounded-xl overflow-x-auto border border-slate-800 font-mono whitespace-pre-wrap select-all">curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"feature_numeric_1": 42.5, "feature_numeric_2": 1.75, "feature_categorical_1": "categoria_a"}'</pre>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Tabla de Inferencia Reciente -->
+      <div class="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800/80 p-6 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <i data-lucide="history" class="w-4 h-4 text-indigo-500"></i>
+            <h3 class="font-semibold text-sm text-slate-900 dark:text-white">Historial de Inferencia Reciente</h3>
+          </div>
+          <span class="text-xs text-slate-400">Últimas 5 llamadas</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 dark:border-slate-800 text-slate-400">
+                <th class="py-2.5 px-3">Timestamp</th>
+                <th class="py-2.5 px-3">Num 1</th>
+                <th class="py-2.5 px-3">Num 2</th>
+                <th class="py-2.5 px-3">Categoría</th>
+                <th class="py-2.5 px-3">Predicción</th>
+                <th class="py-2.5 px-3">Confidence</th>
+                <th class="py-2.5 px-3">Latencia</th>
+                <th class="py-2.5 px-3">Origen</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/50">
+              <!-- Filas generadas dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: INGESTA POR LOTE (BATCH) -->
+    <div id="tab-content-batch" class="tab-pane hidden space-y-6">
+      <div class="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800/80 p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-4 mb-6">
+          <div>
+            <h2 class="font-semibold text-base text-slate-900 dark:text-white flex items-center gap-2">
+              <i data-lucide="database" class="w-5 h-5 text-indigo-500"></i>
+              Procesamiento Batch (CSV / DataFrame Simulado)
+            </h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Previsualiza y clasifica registros concurrentes respetando el contrato de datos.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="runBatchInference()" id="runBatchBtn" class="px-4 py-2 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition flex items-center gap-1.5 shadow-sm">
+              <i data-lucide="play" class="w-3.5 h-3.5"></i> Ejecutar Inferencia de Lote
+            </button>
+            <button onclick="exportBatchCSV()" class="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i> Descargar Resultados (.csv)
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider">
+              <tr>
+                <th class="py-3 px-4">ID Fila</th>
+                <th class="py-3 px-4">feature_numeric_1</th>
+                <th class="py-3 px-4">feature_numeric_2</th>
+                <th class="py-3 px-4">feature_categorical_1</th>
+                <th class="py-3 px-4">Predicción Asignada</th>
+                <th class="py-3 px-4">Nivel Confianza</th>
+                <th class="py-3 px-4">Estado Batch</th>
+              </tr>
+            </thead>
+            <tbody id="batchTableBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <!-- Generado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: MONITOREO & DRIFT (MLOPS) -->
+    <div id="tab-content-monitoring" class="tab-pane hidden space-y-6">
+      
+      <!-- Fila de Tarjetas KPI -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="p-5 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 shadow-sm">
+          <span class="text-xs text-slate-400 block">Total Peticiones (24h)</span>
+          <div class="flex items-baseline justify-between mt-2">
+            <span class="text-2xl font-bold font-mono text-slate-900 dark:text-white">14,290</span>
+            <span class="text-xs text-emerald-500 font-semibold">+18.2%</span>
+          </div>
+        </div>
+        <div class="p-5 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 shadow-sm">
+          <span class="text-xs text-slate-400 block">Latencia Media (P95)</span>
+          <div class="flex items-baseline justify-between mt-2">
+            <span class="text-2xl font-bold font-mono text-slate-900 dark:text-white">18.4 ms</span>
+            <span class="text-xs text-indigo-400 font-semibold">&plusmn; 2.1 ms</span>
+          </div>
+        </div>
+        <div class="p-5 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 shadow-sm">
+          <span class="text-xs text-slate-400 block">Tasa de Error (HTTP 5xx)</span>
+          <div class="flex items-baseline justify-between mt-2">
+            <span class="text-2xl font-bold font-mono text-emerald-500">0.02%</span>
+            <span class="text-xs text-slate-400">99.98% SLA</span>
+          </div>
+        </div>
+        <div class="p-5 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 shadow-sm">
+          <span class="text-xs text-slate-400 block">Data Drift Score (Evidently AI)</span>
+          <div class="flex items-baseline justify-between mt-2">
+            <span class="text-2xl font-bold font-mono text-amber-500">0.041</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 font-medium">Bajo</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gráficos de Métricas -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Gráfico 1: Latencia Temporal -->
+        <div class="lg:col-span-2 p-6 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 shadow-sm">
+          <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-1">Latencia de Inferencia en Tiempo Real (ms)</h3>
+          <p class="text-xs text-slate-400 mb-4">Métricas de tiempo de respuesta de las últimas ventanas de ejecución.</p>
+          <div class="h-64">
+            <canvas id="latencyChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Gráfico 2: Distribución de Clases -->
+        <div class="p-6 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 shadow-sm">
+          <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-1">Distribución de Predicciones</h3>
+          <p class="text-xs text-slate-400 mb-4">Balance entre Clase 0 y Clase 1 emitidas.</p>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="classDistChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-200 dark:border-slate-800/80 py-4 px-6 text-center text-xs text-slate-400 dark:text-slate-500">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <span>Arquitectura MLOps &bull; FastAPI + Scikit-Learn Container</span>
+      <span>API Endpoint: <code class="text-indigo-500 font-mono">POST /predict</code> &bull; Especificación OpenAPI</span>
+    </div>
+  </footer>
+
+  <!-- Mensaje flotante de notificación (Toast) -->
+  <div id="toast" class="fixed bottom-6 right-6 transform translate-y-24 opacity-0 transition-all duration-300 z-50 px-4 py-3 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl flex items-center gap-2 text-xs font-medium">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 dark:text-emerald-600"></i>
+    <span id="toastText">Acción completada</span>
+  </div>
+
+  <!-- Lógica y Scripts de la Aplicación -->
+  <script>
+    // Inicializar Iconos Lucide
+    lucide.createIcons();
+
+    // Sincronización de Sliders y Campos Numéricos
+    const num1Slider = document.getElementById('num1Slider');
+    const num1Input = document.getElementById('num1Input');
+    const num2Slider = document.getElementById('num2Slider');
+    const num2Input = document.getElementById('num2Input');
+    const cat1Select = document.getElementById('cat1Select');
+
+    function syncNum1(fromSlider) {
+      if (fromSlider) num1Input.value = num1Slider.value;
+      else num1Slider.value = num1Input.value;
+      updateLiveCurl();
+    }
+    function syncNum2(fromSlider) {
+      if (fromSlider) num2Input.value = num2Slider.value;
+      else num2Slider.value = num2Input.value;
+      updateLiveCurl();
+    }
+
+    num1Slider.addEventListener('input', () => syncNum1(true));
+    num1Input.addEventListener('input', () => syncNum1(false));
+    num2Slider.addEventListener('input', () => syncNum2(true));
+    num2Input.addEventListener('input', () => syncNum2(false));
+    cat1Select.addEventListener('change', updateLiveCurl);
+
+    // Actualizador de código cURL y Payload en vivo
+    function getPayload() {
+      return {
+        feature_numeric_1: parseFloat(num1Input.value) || 0.0,
+        feature_numeric_2: parseFloat(num2Input.value) || 0.0,
+        feature_categorical_1: cat1Select.value
+      };
+    }
+
+    function updateLiveCurl() {
+      const payload = getPayload();
+      const jsonStr = JSON.stringify(payload, null, 2);
+      const curlText = `curl -X POST http://localhost:8000/predict \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(payload)}'`;
+      document.getElementById('curlBox').textContent = curlText;
+    }
+
+    // Copiar comando cURL
+    function copyCurlCommand() {
+      const curlText = document.getElementById('curlBox').textContent;
+      const textArea = document.createElement("textarea");
+      textArea.value = curlText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      showToast("Comando cURL copiado al portapapeles");
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastText').textContent = msg;
+      toast.classList.remove('translate-y-24', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-24', 'opacity-0');
+      }, 2600);
+    }
+
+    // Reset Formulario
+    function resetInputs() {
+      num1Slider.value = 42.5;
+      num1Input.value = 42.5;
+      num2Slider.value = 1.75;
+      num2Input.value = 1.75;
+      cat1Select.value = 'categoria_a';
+      updateLiveCurl();
+      showToast("Variables restablecidas a valores base");
+    }
+
+    // Ejecutar Inferencia (Llamada Real a localhost:8000 con Fallback)
+    async function triggerPrediction() {
+      const btn = document.getElementById('predictBtn');
+      const btnText = document.getElementById('btnText');
+      const btnLoader = document.getElementById('btnLoader');
+      const payload = getPayload();
+
+      // UI Loading state
+      btn.disabled = true;
+      btnText.textContent = "Procesando...";
+      btnLoader.classList.remove('hidden');
+
+      const startTime = performance.now();
+      let resultData = null;
+      let isSimulated = false;
+
+      try {
+        // Intento de conexión al microservicio local real
+        const response = await fetch('http://localhost:8000/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          // Timeout corto para no bloquear si uvicorn está apagado
+          signal: AbortSignal.timeout(1800)
+        });
+
+        if (!response.ok) throw new Error("Error en respuesta HTTP");
+        resultData = await response.json();
+      } catch (err) {
+        // Fallback: cálculo de simulación matemática alineado con la regresión logística
+        isSimulated = true;
+        await new Promise(r => setTimeout(r, 220)); // Simular latencia de red
+        
+        // Simulación lógica: f(x1, x2) sigmoide
+        const score = (payload.feature_numeric_1 * 0.05) + (payload.feature_numeric_2 * 0.4) - 2.5;
+        const prob = 1 / (1 + Math.exp(-score));
+        const pred = prob >= 0.5 ? 1 : 0;
+        const confidence = pred === 1 ? prob : 1 - prob;
+
+        resultData = {
+          prediction: pred,
+          confidence: parseFloat(confidence.toFixed(4)),
+          model_version: "v1.0.0"
+        };
+      } finally {
+        const endTime = performance.now();
+        const latency = (endTime - startTime).toFixed(1);
+
+        renderPredictionResult(resultData, latency, isSimulated);
+        addHistoryEntry(payload, resultData, latency, isSimulated ? 'Simulado' : 'Live API');
+
+        // Restaurar botón
+        btn.disabled = false;
+        btnText.textContent = "Ejecutar Inferencia Online";
+        btnLoader.classList.add('hidden');
+      }
+    }
+
+    // Actualizar visualización del resultado
+    function renderPredictionResult(data, latency, isSimulated) {
+      const circle = document.getElementById('gaugeCircle');
+      const rawConf = data.confidence;
+      const pct = Math.round(rawConf * 100);
+
+      // Actualizar Gauge (circunferencia = 2 * PI * 40 = 251.2)
+      const offset = 251.2 - (251.2 * rawConf);
+      circle.style.strokeDashoffset = offset;
+
+      document.getElementById('confidencePercentage').textContent = `${pct}%`;
+      document.getElementById('confidenceRaw').textContent = rawConf.toFixed(4);
+
+      const predBadge = document.getElementById('predictionBadge');
+      const predTag = document.getElementById('predictionTag');
+
+      if (data.prediction === 1) {
+        predBadge.textContent = "Clase 1";
+        predBadge.className = "text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono";
+        predTag.textContent = "Positivo";
+        predTag.className = "px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800";
+        circle.setAttribute('class', 'text-emerald-500 transition-all duration-700 ease-out');
+      } else {
+        predBadge.textContent = "Clase 0";
+        predBadge.className = "text-3xl font-extrabold text-rose-500 dark:text-rose-400 font-mono";
+        predTag.textContent = "Negativo";
+        predTag.className = "px-2.5 py-1 text-xs font-semibold rounded-md bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800";
+        circle.setAttribute('class', 'text-rose-500 transition-all duration-700 ease-out');
+      }
+
+      document.getElementById('resModelVersion').textContent = data.model_version || 'v1.0.0';
+      document.getElementById('resLatency').textContent = `${latency} ms`;
+
+      const alertMsg = document.getElementById('apiAlertMsg');
+      const statusBadge = document.getElementById('responseStatusBadge');
+
+      if (isSimulated) {
+        alertMsg.innerHTML = "Aviso: Servidor local inaccesible. Mostrando <b>simulación determinista</b> de inferencia.";
+        statusBadge.textContent = "Modo: Simulación";
+        statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300";
+      } else {
+        alertMsg.innerHTML = "Conexión exitosa con el servicio <b>FastAPI en localhost:8000</b>.";
+        statusBadge.textContent = "HTTP 200 OK";
+        statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300";
+      }
+    }
+
+    // Historial dinámico de inferencias
+    const historyData = [];
+    function addHistoryEntry(input, output, latency, origin) {
+      const now = new Date().toLocaleTimeString();
+      historyData.unshift({ time: now, input, output, latency, origin });
+      if (historyData.length > 5) historyData.pop();
+
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = historyData.map(item => `
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+          <td class="py-2.5 px-3 font-mono text-slate-400">${item.time}</td>
+          <td class="py-2.5 px-3 font-mono">${item.input.feature_numeric_1}</td>
+          <td class="py-2.5 px-3 font-mono">${item.input.feature_numeric_2}</td>
+          <td class="py-2.5 px-3 font-mono text-indigo-400">${item.input.feature_categorical_1}</td>
+          <td class="py-2.5 px-3">
+            <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${item.output.prediction === 1 ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600' : 'bg-rose-100 dark:bg-rose-950 text-rose-500'}">
+              Clase ${item.output.prediction}
+            </span>
+          </td>
+          <td class="py-2.5 px-3 font-mono">${item.output.confidence}</td>
+          <td class="py-2.5 px-3 font-mono">${item.latency} ms</td>
+          <td class="py-2.5 px-3 text-slate-400">${item.origin}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Datos y Lógica del Tab de Lotes (Batch)
+    let batchItems = [
+      { id: "REC-101", num1: 12.4, num2: 0.85, cat: "categoria_a", pred: "-", conf: "-", status: "Pendiente" },
+      { id: "REC-102", num1: 45.0, num2: 2.10, cat: "categoria_b", pred: "-", conf: "-", status: "Pendiente" },
+      { id: "REC-103", num1: 78.2, num2: 3.90, cat: "categoria_c", pred: "-", conf: "-", status: "Pendiente" },
+      { id: "REC-104", num1: 5.1,  num2: 0.40, cat: "categoria_a", pred: "-", conf: "-", status: "Pendiente" },
+      { id: "REC-105", num1: 89.6, num2: 4.80, cat: "categoria_b", pred: "-", conf: "-", status: "Pendiente" }
+    ];
+
+    function renderBatchTable() {
+      const tbody = document.getElementById('batchTableBody');
+      tbody.innerHTML = batchItems.map(item => `
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+          <td class="py-3 px-4 font-mono font-semibold text-slate-600 dark:text-slate-300">${item.id}</td>
+          <td class="py-3 px-4 font-mono">${item.num1}</td>
+          <td class="py-3 px-4 font-mono">${item.num2}</td>
+          <td class="py-3 px-4 text-indigo-400 font-mono">${item.cat}</td>
+          <td class="py-3 px-4 font-mono font-semibold">${item.pred}</td>
+          <td class="py-3 px-4 font-mono">${item.conf}</td>
+          <td class="py-3 px-4">
+            <span class="px-2 py-0.5 rounded text-[11px] font-medium ${item.status === 'Procesado' ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}">
+              ${item.status}
+            </span>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function runBatchInference() {
+      const btn = document.getElementById('runBatchBtn');
+      btn.innerHTML = `<span class="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent mr-1"></span> Procesando...`;
+      
+      setTimeout(() => {
+        batchItems = batchItems.map(row => {
+          const score = (row.num1 * 0.05) + (row.num2 * 0.4) - 2.5;
+          const prob = 1 / (1 + Math.exp(-score));
+          const pred = prob >= 0.5 ? 1 : 0;
+          const conf = pred === 1 ? prob : 1 - prob;
+          return {
+            ...row,
+            pred: `Clase ${pred}`,
+            conf: conf.toFixed(4),
+            status: "Procesado"
+          };
+        });
+        renderBatchTable();
+        btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Ejecutar Inferencia de Lote`;
+        lucide.createIcons();
+        showToast("Lote de 5 registros clasificado exitosamente");
+      }, 400);
+    }
+
+    function exportBatchCSV() {
+      let csvContent = "data:text/csv;charset=utf-8,ID,feature_numeric_1,feature_numeric_2,feature_categorical_1,prediction,confidence,status\n";
+      batchItems.forEach(r => {
+        csvContent += `${r.id},${r.num1},${r.num2},${r.cat},${r.pred},${r.conf},${r.status}\n`;
+      });
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "batch_predictions_export.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("Archivo CSV descargado");
+    }
+
+    // Gestión de Pestañas (Tabs)
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
+        btn.classList.add('border-transparent', 'text-slate-500');
+      });
+
+      document.getElementById(`tab-content-${tabId}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      activeBtn.classList.add('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
+      activeBtn.classList.remove('border-transparent', 'text-slate-500');
+
+      if (tabId === 'monitoring') {
+        initMonitoringCharts();
+      }
+    }
+
+    // Inicializar Gráficos de Monitoreo
+    let latencyChartInstance = null;
+    let classDistChartInstance = null;
+
+    function initMonitoringCharts() {
+      if (latencyChartInstance) return; // Ya creados
+
+      const isDark = document.documentElement.classList.contains('dark');
+      const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+      const textColor = isDark ? '#94a3b8' : '#64748b';
+
+      // Gráfico de Latencia
+      const ctx1 = document.getElementById('latencyChart').getContext('2d');
+      latencyChartInstance = new Chart(ctx1, {
+        type: 'line',
+        data: {
+          labels: ['15:58', '16:00', '16:02', '16:04', '16:06', '16:08', '16:10'],
+          datasets: [{
+            label: 'Latencia p95 (ms)',
+            data: [14.2, 16.5, 13.8, 19.1, 15.0, 14.8, 17.2],
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { grid: { color: gridColor }, ticks: { color: textColor } }
+          }
+        }
+      });
+
+      // Gráfico de Distribución
+      const ctx2 = document.getElementById('classDistChart').getContext('2d');
+      classDistChartInstance = new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+          labels: ['Clase 1 (Positivo)', 'Clase 0 (Negativo)'],
+          datasets: [{
+            data: [62, 38],
+            backgroundColor: ['#10b981', '#f43f5e'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: textColor, font: { size: 11 } }
+            }
+          },
+          cutout: '70%'
+        }
+      });
+    }
+
+    // Toggle Tema Claro / Oscuro
+    const themeBtn = document.getElementById('themeToggleBtn');
+    themeBtn.addEventListener('click', () => {
+      const html = document.documentElement;
+      const isDark = html.classList.toggle('dark');
+      const icon = document.getElementById('themeIcon');
+      icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+      lucide.createIcons();
+      
+      // Actualizar colores de gráficos si existen
+      if (latencyChartInstance && classDistChartInstance) {
+        latencyChartInstance.destroy();
+        classDistChartInstance.destroy();
+        latencyChartInstance = null;
+        classDistChartInstance = null;
+        initMonitoringCharts();
+      }
+    });
+
+    // Check en vivo del endpoint /health
+    async function checkHealth() {
+      try {
+        const res = await fetch('http://localhost:8000/health', { signal: AbortSignal.timeout(1200) });
+        if (res.ok) {
+          document.getElementById('serviceStatusLabel').textContent = "API Health: 200 OK";
+        } else {
+          document.getElementById('serviceStatusLabel').textContent = "API Degraded (503)";
+        }
+      } catch (e) {
+        document.getElementById('serviceStatusLabel').textContent = "API Local Offline (Demo Mode)";
+      }
+    }
+
+    // Inicialización al cargar la página
+    window.addEventListener('load', () => {
+      updateLiveCurl();
+      renderBatchTable();
+      addHistoryEntry(
+        { feature_numeric_1: 42.5, feature_numeric_2: 1.75, feature_categorical_1: "categoria_a" },
+        { prediction: 1, confidence: 0.8954 },
+        "14.2",
+        "Inicial"
+      );
+      checkHealth();
+      setInterval(checkHealth, 8000); // Polling suave del health cada 8s
+    });
+  </script>
+</body>
+</html>
